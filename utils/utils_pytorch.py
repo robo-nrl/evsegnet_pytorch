@@ -33,8 +33,9 @@ from torch.utils.data import DataLoader, Dataset
 
 # applies to a lerarning rate tensor (lr) a decay schedule, the polynomial decay
 def lr_decay(lr, init_learning_rate, end_learning_rate, epoch, total_epochs, power=0.9):
-    lr.assign(
-        (init_learning_rate - end_learning_rate) * math.pow(1 - epoch / 1. / total_epochs, power) + end_learning_rate)
+    #lr.assign((init_learning_rate - end_learning_rate) * math.pow(1 - epoch / 1. / total_epochs, power) + end_learning_rate)
+    lr = (init_learning_rate - end_learning_rate) * math.pow(1 - epoch / 1. / total_epochs, power) + end_learning_rate
+    return lr
 
 
 # converts a list of arrays into a list of tensors

@@ -2,9 +2,10 @@ import numpy as np
 #import tensorflow as tf
 #import tensorflow.contrib.eager as tfe
 import torch
+import torch.nn.functional as F
 import os
 import sys
-#sys.path.insert(0, '/home/min/a/sdasbisw/Desktop/PROJECTS/evcoop/Ev-SegNet-master/')
+sys.path.insert(0, '/home/min/a/sdasbisw/Desktop/PROJECTS/evcoop/Ev-SegNet-master/')
 import nets.Network as Segception
 import utils.Loader_pytorch as loader
 from utils.utils_pytorch import lr_decay, convert_to_tensors, get_metrics
@@ -28,7 +29,7 @@ def train(loader, model, epochs=5, batch_size=2, show_loss=False, augmenter=None
           evaluation=True, save_best_model='/home/min/a/sdasbisw/Desktop/PROJECTS/evcoop/Ev-SegNet-master/results'#, preprocess_mode=None
           ):
     training_samples = len(loader.image_train_list)
-    steps_per_epoch = (training_samples / batch_size) + 1
+    steps_per_epoch = int((training_samples / batch_size) + 1)
     best_miou = 0
 
    
@@ -36,7 +37,7 @@ def train(loader, model, epochs=5, batch_size=2, show_loss=False, augmenter=None
     for epoch in range(epochs):  # for each epoch
         model.train()
         lr_decay(lr, init_lr, 1e-9, epoch, epochs - 1)  # compute the new lr
-        print('epoch: ' + str(epoch) + '. Learning rate: ' + str(lr.numpy()))
+        print('epoch: ' + str(epoch) + '. Learning rate: ' + str(lr))
         
         for step in range(steps_per_epoch):  # for every batch
             optimizer.zero_grad()
@@ -44,15 +45,28 @@ def train(loader, model, epochs=5, batch_size=2, show_loss=False, augmenter=None
             # get batch
             x, y, mask = loader.get_batch(size=batch_size, train=True, augmenter=augmenter)
 
+            x= np.transpose(x, (0,3,2,1))
+            y= np.transpose(y, (0,3,2,1))
+
             #x = preprocess(x, mode=preprocess_mode)
             [x, y, mask] = convert_to_tensors([x, y, mask])
 
             y_, aux_y_ = model(x,# training=True, 
             aux_loss=True)  # get output of the model
 
+            print(y.shape)
+
+            print(y_.shape)
+
             #loss = tf.losses.softmax_cross_entropy(y, y_, weights=mask)  # compute loss
-            loss = torch.nn.CrossEntropyLoss(y, y_, weights=mask)  # compute loss
-            loss_aux = torch.nn.CrossEntropyLoss(y, aux_y_, weights=mask)  # compute loss
+            #l = torch.nn.CrossEntropyLoss(weight = mask)
+            def l(y, y_):
+                loss = torch.sum(- y * F.log_softmax(y_, -1), -1)
+                mean_loss = loss.mean()
+                return mean_loss
+
+            loss = l(y, y_)  # compute loss
+            loss_aux = l(y, aux_y_)  # compute loss
             loss = 1*loss + 0.8*loss_aux
             if show_loss: print('Training loss: ' + str(loss.numpy()))
             

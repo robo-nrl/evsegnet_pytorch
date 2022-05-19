@@ -157,10 +157,13 @@ class Loader:
         and 1's means pixels to take into account.
         This function transofrm those 1's into a weight using the median frequency
         '''
+        import pdb
+        #pdb.set_trace()
         weights = self.median_freq
         for i in range(masks.shape[0]):
             # for every mask of the batch
             label_image = labels[i, :, :]
+            #print("mask:", mask_image)
             mask_image = masks[i, :, :]
             dim_1 = mask_image.shape[0]
             dim_2 = mask_image.shape[1]
@@ -412,7 +415,7 @@ class Loader:
         elif self.problemType == 'segmentation':
             for image_label_train in self.label_train_list:
                 image = cv2.imread(image_label_train, 0)
-                for label in xrange(self.n_classes):
+                for label in range(self.n_classes):
                     self.freq[label] = self.freq[label] + sum(sum(image == label))
 
         # Common code
@@ -521,7 +524,7 @@ if __name__ == "__main__":
     # print(loader.median_frequency_exp())
     x, y, mask = loader.get_batch(size=6, augmenter='segmentation')
 
-    for i in xrange(6):
+    for i in range(6):
         cv2.imshow('x', (x[i, :, :, 0]).astype(np.uint8))
         cv2.imshow('dvs+', (x[i, :, :, 1] * 127).astype(np.int8))
         cv2.imshow('dvs-', (x[i, :, :, 2] * 127).astype(np.int8))

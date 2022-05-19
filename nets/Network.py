@@ -17,7 +17,9 @@ import torchvision
 import torchvision.transforms as tvt
 import ast
 import requests
+import numpy as np
 from torch.utils.data import DataLoader, Dataset
+import pdb
 
 #TO ENSURE CODE REPRODUCIBILITY
 seed = 0
@@ -59,7 +61,7 @@ class SeparableConv2d(nn.Module):
         
  
     def forward(self,x):
-        print("shape1", x.shape)
+        #print("shape1", x.shape)
         x = self.conv1(x)
         x = self.pointwise(x)
         return x
@@ -67,6 +69,13 @@ class SeparableConv2d(nn.Module):
 class Block(nn.Module):
     def __init__(self,in_filters,out_filters,reps,stride=1,start_with_relu=True,grow_first=True):
         super(Block, self).__init__()
+
+        self.in_filters = in_filters
+        self.out_filters = out_filters
+        self.reps = reps
+        self.stride = stride
+        self.start_with_relu = start_with_relu
+        self.grow_first = grow_first
 
         if out_filters != in_filters or stride!=1:
             self.skip = nn.Conv2d(in_filters,out_filters,1,stride=stride, bias=False)
@@ -106,7 +115,7 @@ class Block(nn.Module):
         self.rep = nn.Sequential(*rep)
 
     def forward(self,inp):
-        print("rep inp:", inp.shape)
+        #print("rep inp:", inp.shape)
         x = self.rep(inp)
 
         if self.skip is not None:
@@ -196,6 +205,7 @@ class Xception(nn.Module):
 
     def forward(self, x):
         #print(x.shape)
+
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -238,6 +248,7 @@ class Xception(nn.Module):
         x = self.relu(x)
 
         x = F.adaptive_avg_pool2d(x, (1, 1))
+        #x = a(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
 
@@ -293,11 +304,11 @@ class Segception_small(nn.Module):
         #note: filters=out_channels
         self.adap_encoder_1 = EncoderAdaption(in_channels=256, out_channels=256, kernel_size=3, dilation=1)
         self.adap_encoder_2 = EncoderAdaption(in_channels=728, out_channels=256, kernel_size=3, dilation=1)
-        self.adap_encoder_3 = EncoderAdaption(in_channels=728, out_channels=256, kernel_size=3, dilation=1)
-        self.adap_encoder_4 = EncoderAdaption(in_channels=1024, out_channels=128, kernel_size=3, dilation=1)
-        self.adap_encoder_5 = EncoderAdaption(in_channels=2048, out_channels=128, kernel_size=3, dilation=1)
+        self.adap_encoder_3 = EncoderAdaption(in_channels=728, out_channels=128, kernel_size=3, dilation=1)
+        self.adap_encoder_4 = EncoderAdaption(in_channels=1024, out_channels=64, kernel_size=3, dilation=1)
+        self.adap_encoder_5 = EncoderAdaption(in_channels=2048, out_channels=32, kernel_size=3, dilation=1)
 
-        self.decoder_conv_1 = FeatureGeneration(in_channels=128, out_channels=128, kernel_size=3, dilation=1, blocks=3)
+        self.decoder_conv_1 = FeatureGeneration(in_channels=256, out_channels=128, kernel_size=3, dilation=1, blocks=3)
         self.decoder_conv_2 = FeatureGeneration(in_channels=128, out_channels=64, kernel_size=3, dilation=1, blocks=3)
         self.decoder_conv_3 = FeatureGeneration(in_channels=64, out_channels=32, kernel_size=3, dilation=1, blocks=3)
         self.decoder_conv_4 = FeatureGeneration(in_channels=32, out_channels=32, kernel_size=3, dilation=1, blocks=1)
@@ -306,10 +317,9 @@ class Segception_small(nn.Module):
         self.conv_logits = conv(in_channels= 32, out_channels=num_classes, kernel_size=1, stride=1, bias=True)
 
     def forward(self, inputs, mask=None, aux_loss=False):
-        
-        
-        outputs=[]
-
+        print(inputs.shape)
+        #inputs = np.transpose(inputs, (0,3,2,1))
+        #print(inputs.shape)
         #print('here:', inputs.shape)
 
         outputs = xception_out(inputs)
@@ -322,6 +332,9 @@ class Segception_small(nn.Module):
         print("output[2].shape:", outputs[2].shape)
         print("output[3].shape:", outputs[3].shape)
         print("output[4].shape:", outputs[4].shape)
+
+        #pdb.set_trace()
+
         x = self.adap_encoder_1(outputs[0]#, training=training
         )
         #print("x.shape:", x.shape)
@@ -332,10 +345,11 @@ class Segception_small(nn.Module):
         #, training=training
         )  # 256
 
+        #print("here:", x.shape)
+
         x = upsampling(x, scale=2)
-        x += reshape_into(self.adap_encoder_3(outputs[2]
-        #, training=training
-        ), x)  # 256
+        #print("here:", x.shape)
+        x += reshape_into(self.adap_encoder_3(outputs[2]), x)  # 256
         x = self.decoder_conv_2(x
         #, training=training
         )  # 256
@@ -372,6 +386,7 @@ class EncoderAdaption(nn.Module):
 
         self.out_channels = out_channels
         self.kernel_size = kernel_size
+        self.dilation =dilation
 
         self.conv1 = Conv_BN(in_channels, out_channels, kernel_size=1)
         self.conv2 = ShatheBlock(out_channels, out_channels, kernel_size=kernel_size, dilation=dilation)
@@ -392,6 +407,8 @@ class FeatureGeneration(nn.Module):
         self.in_channel=in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
+        self.blocks = blocks
+        self.dilation =dilation
 
         self.conv0 = Conv_BN( in_channels, out_channels, kernel_size=1)
         self.blocks = []
@@ -414,13 +431,17 @@ class ShatheBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size,  dilation=1, bottleneck=2):
         super(ShatheBlock, self).__init__()
         self.in_channel=in_channels
+        self.bottleneck = bottleneck
         self.out_channels = out_channels * bottleneck
         self.kernel_size = kernel_size
 
+        #print("shathe:",out_channels)
+        #print("self:",ch)
+
         self.conv = DepthwiseConv_BN(in_channels, self.out_channels, kernel_size=kernel_size, dilation=dilation)
-        self.conv1 = DepthwiseConv_BN(in_channels, self.out_channels, kernel_size=kernel_size, dilation=dilation)
-        self.conv2 = DepthwiseConv_BN(in_channels, self.out_channels, kernel_size=kernel_size, dilation=dilation)
-        self.conv3 = Conv_BN( out_channels, out_channels, kernel_size=1)
+        self.conv1 = DepthwiseConv_BN(in_channels= self.out_channels, out_channels=self.out_channels, kernel_size=kernel_size, dilation=dilation)
+        self.conv2 = DepthwiseConv_BN(self.out_channels, self.out_channels, kernel_size=kernel_size, dilation=dilation)
+        self.conv3 = Conv_BN( self.out_channels, out_channels, kernel_size=1)
 
     def forward(self, inputs#, training=None
     ):
@@ -448,6 +469,8 @@ class Conv_BN(nn.Module):
 
     def forward(self, inputs,# training=None,
     activation=True):
+        import pdb
+        #pdb.set_trace()
         x = self.conv(inputs)
         x = self.bn(x#, training=training
         )
@@ -459,14 +482,16 @@ class Conv_BN(nn.Module):
 class DepthwiseConv_BN(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, dilation=1):
         super(DepthwiseConv_BN, self).__init__()
-
-        self.in_channel=in_channels
+        self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
         self.stride = stride
+        self.dilation =dilation
 
-        self.conv = SeparableConv2d(in_channels, out_channels = out_channels, kernel_size=kernel_size, stride=stride,dilation=dilation)
-        self.bn = nn.BatchNorm2d(out_channels, eps=1e-3, momentum=0.993)
+        #print("dep:",out_channels)
+
+        self.conv = separableConv(in_channels, out_channels, kernel_size=kernel_size, stride=stride,dilation=dilation)
+        self.bn = nn.BatchNorm2d(num_features=out_channels, eps=1e-3, momentum=0.993)
 
     def forward(self, inputs#, training=None
     ):
@@ -482,11 +507,12 @@ class ASPP_2(nn.Module):
         super(ASPP_2, self).__init__()
         self.in_channel=in_channels
         self.out_channels = out_channels
+        self.kernel_size = kernel_size
 
         self.conv1 = DepthwiseConv_BN(in_channels, out_channels, kernel_size=1, dilation=1)
-        self.conv2 = DepthwiseConv_BN(out_channels, out_channels, kernel_size=kernel_size, dilation=4)
-        self.conv3 = DepthwiseConv_BN(out_channels, out_channels, kernel_size=kernel_size, dilation=8)
-        self.conv4 = DepthwiseConv_BN(out_channels, out_channels, kernel_size=kernel_size, dilation=16)
+        self.conv2 = DepthwiseConv_BN(out_channels, out_channels,kernel_size=kernel_size, dilation=4)
+        self.conv3 = DepthwiseConv_BN(out_channels, out_channels,kernel_size=kernel_size, dilation=8)
+        self.conv4 = DepthwiseConv_BN(out_channels, out_channels,kernel_size=kernel_size, dilation=16)
         self.conv6 = DepthwiseConv_BN(out_channels, out_channels, kernel_size=kernel_size, dilation=(2, 8))
         self.conv7 = DepthwiseConv_BN(out_channels, out_channels, kernel_size=kernel_size, dilation=(6, 3))
         self.conv8 = DepthwiseConv_BN(out_channels, out_channels, kernel_size=kernel_size, dilation=(8, 2))
@@ -495,11 +521,12 @@ class ASPP_2(nn.Module):
 
     def forward(self, inputs,# training=None, 
     operation='concat'):
-        feature_map_size = torch.size(inputs)
-        image_features = torch.mean(inputs, [1, 2], keep_dims=True)
+        feature_map_size = inputs.shape
+        image_features = torch.mean(inputs, [2, 3], True)
+        #pdb.set_trace()
         image_features = self.conv1(image_features#, training=training
         )
-        image_features=F.interpolate(image_features, size=(feature_map_size[1], feature_map_size[2]), mode='bilinear')
+        image_features=F.interpolate(image_features, size=(feature_map_size[2], feature_map_size[3]), mode='bilinear')
         x1 = self.conv2(inputs#, training=training
         )
         x2 = self.conv3(inputs#, training=training
@@ -524,11 +551,11 @@ class ASPP_2(nn.Module):
         return x
 
 def upsampling(inputs, scale):
-    return F.interpolate(inputs, size=[torch.size(inputs)[1] * scale, torch.size(inputs)[2] * scale], align_corners=True)
+    return F.interpolate(inputs, scale_factor =2,  mode = 'bilinear', align_corners=True)
 
 
 def reshape_into(inputs, input_to_copy):
-    return F.interpolate(inputs, size=[input_to_copy.get_shape()[1].value, input_to_copy.get_shape()[2].value], align_corners=True)
+    return F.interpolate(inputs, size=[input_to_copy.shape[2], input_to_copy.shape[3]], mode = 'bilinear', align_corners=True)
 
 
 # convolution
@@ -540,17 +567,25 @@ def conv(in_channels, out_channels, kernel_size, stride=1, dilation=1, bias=Fals
 class separableConv(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, dilation=1, bias=False):
         super(separableConv, self).__init__()
-        self.depthwise = nn.Conv2d(in_channels, in_channels, kernel_size=kernel_size, 
-                                stride=stride, groups=in_channels, bias=bias, padding='same')
-        self.pointwise = nn.Conv2d(in_channels, out_channels, 
-                                kernel_size=1, bias=bias)
+        self.in_channel=in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.dilation =dilation
+        self.stride = stride
+        self.bias = bias
+
+        #print("hi:",out_channels)
+
+        self.depthwise = nn.Conv2d(in_channels, in_channels, kernel_size=kernel_size, stride=stride, groups=in_channels, bias=bias, padding='same')
+        self.pointwise = nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=bias, padding='same')
 
 
 
 
     def forward(self, x):
-        
-        out = self.depthwise(x)
-        out = self.pointwise(out)
-        return out
+        import pdb
+        #pdb. set_trace()
+        x = self.depthwise(x)
+        x = self.pointwise(x)
+        return x
 
