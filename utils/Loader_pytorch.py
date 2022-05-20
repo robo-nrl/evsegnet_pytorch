@@ -110,6 +110,7 @@ class Loader:
 
 
         elif problemType == 'segmentation':
+            print("13")
             # The structure has to be dataset/train/images/image.png
             # The structure has to be dataset/train/labels/label.png
             # Separate image and label lists
@@ -144,6 +145,7 @@ class Loader:
 
     def suffle_segmentation(self):
         if self.problemType == 'segmentation':
+            print("12")
             s = np.arange(len(self.image_train_list))
             np.random.shuffle(s)
             self.image_train_list = np.array(self.image_train_list)[s]
@@ -158,6 +160,7 @@ class Loader:
         This function transofrm those 1's into a weight using the median frequency
         '''
         import pdb
+        print("2")
         #pdb.set_trace()
         weights = self.median_freq
         for i in range(masks.shape[0]):
@@ -182,7 +185,7 @@ class Loader:
 
     def _perform_augmentation_segmentation(self, img, label, mask_image, augmenter, event=None, events=False):
         seq_image, seq_label, seq_mask, seq_event = get_augmenter(name=augmenter, c_val=255)
-
+        print("1")
         # apply some contrast  to de rgb image
         img = img.reshape(sum(((1,), img.shape), ()))
         img = seq_image.augment_images(img)
@@ -209,7 +212,7 @@ class Loader:
     def _get_batch_segmentation(self, size=32, train=True
     , augmenter=None):
         events = self.channels_events > 0
-
+        print("hey")
         # init numpy arrays
         if events:
             x = np.zeros([size, self.height, self.width, int(self.dim + self.channels_events)], dtype=np.float32)
@@ -244,6 +247,7 @@ class Loader:
         # the augmentation has to be done separately due to augmentation
         for index in range(size):
             if self.dim == 1:
+
                 img = cv2.imread(random_images[index], 0)
             else:
                 # img = cv2.imread(random_images[index])
@@ -301,6 +305,7 @@ class Loader:
 
         
         def to_categorical(y, num_classes=None, dtype='float32'):
+            print("3")
             y = np.array(y, dtype='int')
             input_shape = y.shape
             if input_shape and input_shape[-1] == 1 and len(input_shape) > 1:
@@ -323,6 +328,7 @@ class Loader:
 
     # Returns a random batch
     def _get_batch_rgb(self, size=32, train=True, augmenter=None):
+        print("4")
 
         x = np.zeros([size, self.height, self.width, self.dim], dtype=np.float32)
         y = np.zeros([size], dtype=np.uint8)
@@ -358,6 +364,7 @@ class Loader:
         # the labeling to categorical (if 5 classes and value is 2:  2 -> [0,0,1,0,0])
 
         def to_categorical(y, num_classes=None, dtype='float32'):
+            print("12")
             y = np.array(y, dtype='int')
             input_shape = y.shape
             if input_shape and input_shape[-1] == 1 and len(input_shape) > 1:
@@ -381,6 +388,7 @@ class Loader:
         return x, y
 
     def _get_key_by_value(self, dictionary, value_searching):
+        print("11")
         for key, value in dictionary.iteritems():
             if value == value_searching:
                 return key
@@ -395,6 +403,7 @@ class Loader:
         if augmenter is no None, image augmentation will be perform (see file augmenters.py)
         if images are bigger than max_size of smaller than min_size, images will be resized (forced)
         '''
+        print("5")
         if self.problemType == 'classification':
             return self._get_batch_rgb(size=size, train=train
             , augmenter=augmenter)
@@ -404,6 +413,8 @@ class Loader:
 
     # Returns the median frequency for class imbalance. It can be soften with the soft value (<=1)
     def median_frequency_exp(self, soft=1):
+
+        print("10")
 
         if self.problemType == 'classification':
             quantity = []
@@ -431,6 +442,7 @@ class Loader:
 
 
     def augment_event(self, event_image, swap_max=0.35, delete_pixel_max=0.80, make_up_max=0.02, change_value_max=0.45):
+        print("6")
         _, w, h, c = event_image.shape
         pixels = w*h
 
@@ -445,6 +457,7 @@ class Loader:
         change_value_pixels = np.random.randint(0, high=change_value_pixels_max)
 
         for index in range(swap_pixels):
+            print("8")
             i = np.random.randint(0, w)
             j = np.random.randint(0, h)
             i_n, j_n = get_neighbour(i, j, w-1, h-1)
@@ -497,6 +510,7 @@ class Loader:
 
 
 def  get_neighbour(i, j, max_i, max_j):
+    print("7")
     random_number= np.random.random()
     if random_number < 0.25:
         j += 1

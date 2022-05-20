@@ -1,3 +1,6 @@
+import os
+os.environ['CUDA_VISIBLE_DEVICES']="0,1,2,3"
+
 import numpy as np
 #import tensorflow as tf
 #import tensorflow.contrib.eager as tfe
@@ -6,17 +9,37 @@ import torch.nn.functional as F
 import os
 import sys
 sys.path.insert(0, '/home/min/a/sdasbisw/Desktop/PROJECTS/evcoop/Ev-SegNet-master/')
-import nets.Network as Segception
+import nets.Network_1 as Segception
 import utils.Loader_pytorch as loader
 from utils.utils_pytorch import lr_decay, convert_to_tensors, get_metrics
 #from utils.utils import , restore_state, init_model, preprocess, get_params, 
 import argparse
 import shutil
 
+
+torch.cuda.empty_cache()
+
 # enable eager mode
 #tf.enable_eager_execution()
 #tf.set_random_seed(7)
-np.random.seed(7)
+random_seed = 1 # or any of your favorite number 
+torch.manual_seed(random_seed)
+torch.cuda.manual_seed(random_seed)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+np.random.seed(random_seed)
+
+
+def get_default_device():
+    """Pick GPU if available, else CPU"""
+    if torch.cuda.is_available():
+        return torch.device('cuda')
+    else:
+        return torch.device('cpu')
+device = get_default_device()
+
+print("device:", device)
+print("GPU card number:", torch.cuda.current_device())
 
 def save_checkpoint(state, save_best_model, filename='checkpoint.pth.tar'):
     torch.save(state, os.path.join(save_best_model,filename))
@@ -31,6 +54,10 @@ def train(loader, model, epochs=5, batch_size=2, show_loss=False, augmenter=None
     training_samples = len(loader.image_train_list)
     steps_per_epoch = int((training_samples / batch_size) + 1)
     best_miou = 0
+    #model = model.to(device)
+
+    print("hi")
+    
 
    
 
@@ -51,12 +78,18 @@ def train(loader, model, epochs=5, batch_size=2, show_loss=False, augmenter=None
             #x = preprocess(x, mode=preprocess_mode)
             [x, y, mask] = convert_to_tensors([x, y, mask])
 
+            x= x.to(device)
+            y = y.to(device)
+            mask =mask.to(device)
+
+            print("here")
+
             y_, aux_y_ = model(x,# training=True, 
             aux_loss=True)  # get output of the model
 
-            print(y.shape)
+            # print(y.shape)
 
-            print(y_.shape)
+            # print(y_.shape)
 
             #loss = tf.losses.softmax_cross_entropy(y, y_, weights=mask)  # compute loss
             #l = torch.nn.CrossEntropyLoss(weight = mask)
@@ -119,7 +152,7 @@ if __name__ == "__main__":
     parser.add_argument("--width", help="number of epochs to train", default=352)
     parser.add_argument("--height", help="number of epochs to train", default=224)
     parser.add_argument("--lr", help="init learning rate", default=1e-3)
-    parser.add_argument("--n_gpu", help="number of the gpu", default=0)
+    parser.add_argument("--n_gpu", help="number of the gpu", default=2)
     args = parser.parse_args()
 
     n_gpu = int(args.n_gpu)
@@ -141,16 +174,22 @@ if __name__ == "__main__":
     pretrained_model = args.model_path
     #name_best_model = os.path.join(folder_best_model,'best')
     dataset_path = args.dataset
-    loader = loader.Loader(dataFolderPath=dataset_path, n_classes=num_classes, problemType='segmentation',
-                           width=width, height=height, channels=channels_image, channels_events=channels_events)
-
+       
     if not os.path.exists(save_best_model):
         os.makedirs(save_best_model)
 
+
+    loader = loader.Loader(dataFolderPath=dataset_path, n_classes=num_classes, problemType='segmentation',width=width, height=height, channels=channels_image, channels_events=channels_events)
+
+ 
     # build model and optimizer
     #import pdb; pdb.set_trace()
     model = Segception.Segception_small(num_classes=num_classes, weights=None, input_shape=(channels, None, None))
-
+    print("model")
+    model = model.to(device)
+    print("modelll")
+    model = torch.nn.DataParallel(model).to(device)
+    print("to device")
     # optimizer
     #learning_rate = tfe.Variable(lr)
     learning_rate= lr
