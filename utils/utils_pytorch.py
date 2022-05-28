@@ -205,7 +205,7 @@ def get_metrics(loader, model, n_classes, train=True, flip_inference=False, scal
         y_ = torch.reshape(y_, [y_.shape[3] * y_.shape[2] * y_.shape[0], y_.shape[1]])
         mask = torch.reshape(mask, [mask.shape[1] * mask.shape[2] * mask.shape[0]])
 
-        pdb.set_trace()
+        #pdb.set_trace()
 
         max_probs1, labels = torch.max(y, 1)
         max_probs2, predictions = torch.max(y_, 1)
