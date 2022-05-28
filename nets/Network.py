@@ -257,40 +257,40 @@ class Xception(nn.Module):
 
 
 
-def xception_out(inputs, pretrained=False):
-    """
-    Construct Xception.
-    """
+# def xception_out(inputs, pretrained=False):
+#     """
+#     Construct Xception.
+#     """
 
-    model = Xception(num_classes = 6)
-    if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['xception']))
+#     model = Xception(num_classes = 6)
+#     if pretrained:
+#         model.load_state_dict(model_zoo.load_url(model_urls['xception']))
     
-    features_0= model.block2.rep[5].register_forward_hook(get_features('block2_sepconv2_bn'))
-    features_1= model.block3.rep[5].register_forward_hook(get_features('block3_sepconv2_bn'))
-    features_2= model.block4.rep[4].register_forward_hook(get_features('block4_sepconv2_bn'))
-    features_3= model.bn5.register_forward_hook(get_features('block13_sepconv2_bn'))
-    features_4= model.bn7.register_forward_hook(get_features('block14_sepconv2_bn'))
+#     features_0= model.block2.rep[5].register_forward_hook(get_features('block2_sepconv2_bn'))
+#     features_1= model.block3.rep[5].register_forward_hook(get_features('block3_sepconv2_bn'))
+#     features_2= model.block4.rep[4].register_forward_hook(get_features('block4_sepconv2_bn'))
+#     features_3= model.bn5.register_forward_hook(get_features('block13_sepconv2_bn'))
+#     features_4= model.bn7.register_forward_hook(get_features('block14_sepconv2_bn'))
 
-    outputs=model(inputs)
+#     outputs=model(inputs)
 
-    #feats = [features_0, features_1, features_2, features_3, features_4]
+#     #feats = [features_0, features_1, features_2, features_3, features_4]
 
-    feats = []
+#     feats = []
 
-    feats.append(features['block2_sepconv2_bn'])
-    feats.append(features['block3_sepconv2_bn'])
-    feats.append(features['block4_sepconv2_bn'])
-    feats.append(features['block13_sepconv2_bn'])
-    feats.append(features['block14_sepconv2_bn'])
+#     feats.append(features['block2_sepconv2_bn'])
+#     feats.append(features['block3_sepconv2_bn'])
+#     feats.append(features['block4_sepconv2_bn'])
+#     feats.append(features['block13_sepconv2_bn'])
+#     feats.append(features['block14_sepconv2_bn'])
 
-    features_0.remove()
-    features_1.remove()
-    features_2.remove()
-    features_3.remove()
-    features_4.remove()
+#     features_0.remove()
+#     features_1.remove()
+#     features_2.remove()
+#     features_3.remove()
+#     features_4.remove()
 
-    return feats
+#     return feats
 
 
 #END XCEPTION
@@ -300,6 +300,8 @@ def xception_out(inputs, pretrained=False):
 class Segception_small(nn.Module):
     def __init__(self, num_classes=6, input_shape=(3, None, None), weights='imagenet'):
         super(Segception_small, self).__init__()
+        self.xception = Xception(num_classes)
+        self.xception.load_state_dict(model_zoo.load_url(model_urls['xception']))
         self.num_classes=num_classes
         #note: filters=out_channels
         self.adap_encoder_1 = EncoderAdaption(in_channels=256, out_channels=256, kernel_size=3, dilation=1)
@@ -322,7 +324,33 @@ class Segception_small(nn.Module):
         #print(inputs.shape)
         #print('here:', inputs.shape)
 
-        outputs = xception_out(inputs)
+        #outputs = xception_out(inputs)
+        features_0= self.xception.block2.rep[5].register_forward_hook(get_features('block2_sepconv2_bn'))
+        features_1= self.xception.block3.rep[5].register_forward_hook(get_features('block3_sepconv2_bn'))
+        features_2= self.xception.block4.rep[4].register_forward_hook(get_features('block4_sepconv2_bn'))
+        features_3= self.xception.bn5.register_forward_hook(get_features('block13_sepconv2_bn'))
+        features_4= self.xception.bn7.register_forward_hook(get_features('block14_sepconv2_bn'))
+
+        out=self.xception(inputs)
+
+        #feats = [features_0, features_1, features_2, features_3, features_4]
+
+        feats = []
+
+        feats.append(features['block2_sepconv2_bn'])
+        feats.append(features['block3_sepconv2_bn'])
+        feats.append(features['block4_sepconv2_bn'])
+        feats.append(features['block13_sepconv2_bn'])
+        feats.append(features['block14_sepconv2_bn'])
+
+        features_0.remove()
+        features_1.remove()
+        features_2.remove()
+        features_3.remove()
+        features_4.remove()
+
+        outputs = []
+        outputs = feats.to('cuda:0')
         # add activations to the ourputs of the model
         for i in range(len(outputs)):
             outputs[i] = nn.LeakyReLU(negative_slope=0.3)(outputs[i])

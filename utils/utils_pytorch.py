@@ -12,6 +12,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import datasets, models, transforms
 from torch.utils.data import DataLoader, Dataset
+import pdb
+
+def get_default_device():
+    """Pick GPU if available, else CPU"""
+    if torch.cuda.is_available():
+        return torch.device('cuda')
+    else:
+        return torch.device('cpu')
+device = get_default_device()
 
 # Prints the number of parameters of a model
 #def get_params(model):
@@ -63,7 +72,13 @@ def convert_to_tensors(list_to_convert):
 
 # Erase the elements if they are from ignore class. returns the labesl and predictions with no ignore labels
 def erase_ignore_pixels(labels, predictions, mask):
-    indices = torch.squeeze(torch.where(torch.gt(mask, 0)))  # not ignore labels
+    #indices = tf.squeeze(tf.where(tf.greater(mask, 0)))
+    indices=[]
+    for idx in range(len(mask)):
+        if mask[idx]>0:
+            indices.append(idx)
+
+    #indices = torch.squeeze(torch.where(torch.gt(mask, 0)))  # not ignore labels
     #labels = tf.cast(tf.gather(labels, indices), torch.int64)
     labels = labels[indices]
     labels = labels.to(torch.int64)
@@ -106,24 +121,24 @@ def inference(model, batch_images, n_classes, flip_inference=True, scales=[1]):
     #x = preprocess(batch_images, mode=preprocess_mode)
     x = batch_images
     #x = x.permute(0, 3, 2, 1)
-    x = np.transpose(x, (0, 3, 2, 1))
-    [x] = convert_to_tensors([x])
+
 
     # creates the variable to store the scores
     y_ = convert_to_tensors([np.zeros((x.shape[0], n_classes, x.shape[2], x.shape[3]), dtype=np.float32)])[0]
+    y_ = y_.to(device)
 
     for scale in scales:
         # scale the image
         
         x_scaled = F.interpolate(x, size=(x.shape[2] * scale, x.shape[3] * scale),
-                                          mode='bilinear', align_corners=True)
-        print('a:', x.shape)
+                                          mode='bilinear', align_corners=True).to(device)
+        #print('a:', x.shape)
         y_scaled = model(x_scaled)
         #  rescale the output
         y_scaled = F.interpolate(y_scaled, size=(x.shape[2], x.shape[3]),
-                                          mode='bilinear', align_corners=True)
+                                          mode='bilinear', align_corners=True).to(device)
         # get scores
-        y_scaled = F.softmax(y_scaled)
+        y_scaled = F.softmax(y_scaled, dim=1)
 
         if flip_inference:
             # calculates flipped scores
@@ -136,7 +151,7 @@ def inference(model, batch_images, n_classes, flip_inference=True, scales=[1]):
             y_flipped_ = F.interpolate(y_flipped_, size = (x.shape[2], x.shape[3]),
                                                 mode='bilinear', align_corners=True)
             # get scores
-            y_flipped_score = F.softmax(y_flipped_)
+            y_flipped_score = F.softmax(y_flipped_, dim=1)
 
             y_scaled += y_flipped_score
 
@@ -164,7 +179,20 @@ def get_metrics(loader, model, n_classes, train=True, flip_inference=False, scal
     for step in range(samples):  # for every batch
         x, y, mask = loader.get_batch(size=1, train=train, augmenter=False)
 
-        [y] = convert_to_tensors([y])
+        [y, mask] = convert_to_tensors([y, mask])
+
+        y= np.transpose(y, (0,3,2,1))
+
+        
+
+        x = np.transpose(x, (0, 3, 2, 1))
+        mask = np.transpose(mask, (0, 2, 1))
+        [x] = convert_to_tensors([x])
+
+        x= x.to(device)
+        y = y.to(device)
+        mask =mask.to(device)
+
         y_ = inference(model, x, n_classes, flip_inference, scales#, preprocess_mode=preprocess_mode
         )
 
@@ -175,15 +203,20 @@ def get_metrics(loader, model, n_classes, train=True, flip_inference=False, scal
         # Rephape
         y = torch.reshape(y, [y.shape[3] * y.shape[2] * y.shape[0], y.shape[1]])
         y_ = torch.reshape(y_, [y_.shape[3] * y_.shape[2] * y_.shape[0], y_.shape[1]])
-        mask = torch.reshape(mask, [mask.shape[3] * mask.shape[2] * mask.shape[0]])
+        mask = torch.reshape(mask, [mask.shape[1] * mask.shape[2] * mask.shape[0]])
+
+        pdb.set_trace()
+
+        max_probs1, labels = torch.max(y, 1)
+        max_probs2, predictions = torch.max(y_, 1)
 
         #labels, predictions = erase_ignore_pixels(labels=tf.argmax(y, 1), predictions=tf.argmax(y_, 1), mask=mask)
-        labels, predictions = erase_ignore_pixels(labels=torch.max(y, 1), predictions=torch.max(y_, 1), mask=mask)
+        labels, predictions = erase_ignore_pixels(labels, predictions, mask=mask)
         
         accuracy = (predictions == labels).sum().item() / predictions.size(0)
 
         #accuracy(labels, predictions)
-        conf_matrix += confusion_matrix(labels.numpy(), predictions.numpy(), labels=range(0, n_classes))
+        conf_matrix += confusion_matrix(labels.to('cpu').numpy(), predictions.to('cpu').numpy(), labels=range(0, n_classes))
 
     # get the train and test accuracy from the model
     #return accuracy.result(), compute_iou(conf_matrix)

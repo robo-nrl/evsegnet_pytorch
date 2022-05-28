@@ -1,11 +1,12 @@
 import os
-os.environ['CUDA_VISIBLE_DEVICES']="0,1,2,3"
+os.environ['CUDA_VISIBLE_DEVICES']="2,"
 
 import numpy as np
 #import tensorflow as tf
 #import tensorflow.contrib.eager as tfe
 import torch
 import torch.nn.functional as F
+import torchvision
 import os
 import sys
 sys.path.insert(0, '/home/min/a/sdasbisw/Desktop/PROJECTS/evcoop/Ev-SegNet-master/')
@@ -15,6 +16,8 @@ from utils.utils_pytorch import lr_decay, convert_to_tensors, get_metrics
 #from utils.utils import , restore_state, init_model, preprocess, get_params, 
 import argparse
 import shutil
+import matplotlib.pyplot as plt
+from torchvision.utils import make_grid
 
 
 torch.cuda.empty_cache()
@@ -25,9 +28,12 @@ torch.cuda.empty_cache()
 random_seed = 1 # or any of your favorite number 
 torch.manual_seed(random_seed)
 torch.cuda.manual_seed(random_seed)
+#torch.backends.cudnn.enabled = False 
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 np.random.seed(random_seed)
+
+from datetime import datetime
 
 
 def get_default_device():
@@ -38,6 +44,7 @@ def get_default_device():
         return torch.device('cpu')
 device = get_default_device()
 
+#device ='cuda:2'
 print("device:", device)
 print("GPU card number:", torch.cuda.current_device())
 
@@ -56,7 +63,7 @@ def train(loader, model, epochs=5, batch_size=2, show_loss=False, augmenter=None
     best_miou = 0
     #model = model.to(device)
 
-    print("hi")
+    #print("hi")
     
 
    
@@ -74,6 +81,7 @@ def train(loader, model, epochs=5, batch_size=2, show_loss=False, augmenter=None
 
             x= np.transpose(x, (0,3,2,1))
             y= np.transpose(y, (0,3,2,1))
+            mask = np.transpose(mask, (0, 2, 1))
 
             #x = preprocess(x, mode=preprocess_mode)
             [x, y, mask] = convert_to_tensors([x, y, mask])
@@ -82,26 +90,43 @@ def train(loader, model, epochs=5, batch_size=2, show_loss=False, augmenter=None
             y = y.to(device)
             mask =mask.to(device)
 
-            print("here")
+            
+            #print("shape mask:", mask.shape)
+
+            
+            #x= x.to('cuda:2')
+            #y = y.to('cuda:2')
+            #mask =mask.to('cuda:2')
+
+            print("Batch loaded to GPU")
 
             y_, aux_y_ = model(x,# training=True, 
             aux_loss=True)  # get output of the model
 
-            # print(y.shape)
+            #print(y.shape)
+            #print("y:", y.dtype)
 
-            # print(y_.shape)
+            #print(y[:1].data())
+            #print(y_.shape)
+            #print("y_:", y_.dtype)
 
             #loss = tf.losses.softmax_cross_entropy(y, y_, weights=mask)  # compute loss
             #l = torch.nn.CrossEntropyLoss(weight = mask)
             def l(y, y_):
-                loss = torch.sum(- y * F.log_softmax(y_, -1), -1)
+                y1 = torch.reshape(y, [y.shape[3] * y.shape[2] * y.shape[0], y.shape[1]])
+                #print(y1.shape)
+                y1_ = torch.reshape(y_, [y_.shape[3] * y_.shape[2] * y_.shape[0], y_.shape[1]])
+                loss = -torch.sum(F.log_softmax(y1_, dim=1) * y1, dim=1)
+                #loss = torch.sum(- y1 * F.log_softmax(y1_, -1), -1)
                 mean_loss = loss.mean()
+                #print("mean:", mean_loss.item())
                 return mean_loss
+
 
             loss = l(y, y_)  # compute loss
             loss_aux = l(y, aux_y_)  # compute loss
             loss = 1*loss + 0.8*loss_aux
-            if show_loss: print('Training loss: ' + str(loss.numpy()))
+            print('Training loss: ' + str(loss.item()))
             
 
             # Gets gradients and applies them
@@ -115,14 +140,15 @@ def train(loader, model, epochs=5, batch_size=2, show_loss=False, augmenter=None
         if evaluation:
             model.eval()
             # get metrics
-            #train_acc, train_miou = get_metrics(loader, model, loader.n_classes, train=True, preprocess_mode=preprocess_mode)
+            train_acc, train_miou = get_metrics(loader, model, loader.n_classes, train=True, #preprocess_mode=preprocess_mode
+            )
             test_acc, test_miou = get_metrics(loader, model, loader.n_classes, train=False, flip_inference=False,
                                               scales=[1]#, preprocess_mode=preprocess_mode
                                               )
 
-            #print('Train accuracy: ' + str(train_acc.numpy()))
-            #print('Train miou: ' + str(train_miou))
-            print('Test accuracy: ' + str(test_acc.numpy()))
+            print('Train accuracy: ' + str(train_acc))
+            print('Train miou: ' + str(train_miou))
+            print('Test accuracy: ' + str(test_acc))
             print('Test miou: ' + str(test_miou))
             print('')
 
@@ -185,11 +211,17 @@ if __name__ == "__main__":
     # build model and optimizer
     #import pdb; pdb.set_trace()
     model = Segception.Segception_small(num_classes=num_classes, weights=None, input_shape=(channels, None, None))
-    print("model")
+    print("model created")
+    start_time = datetime.now()
     model = model.to(device)
-    print("modelll")
-    model = torch.nn.DataParallel(model).to(device)
-    print("to device")
+    #model = model.to('cuda:0')
+    print("model moved to GPU")
+    #print(model)
+    end_time = datetime.now()
+    print('Duration for model transfer: {}'.format(end_time - start_time))
+    #print(model.parameters())
+    #model = torch.nn.DataParallel(model).to(device)
+    #print("to device")
     # optimizer
     #learning_rate = tfe.Variable(lr)
     learning_rate= lr
@@ -235,7 +267,7 @@ if __name__ == "__main__":
     with torch.no_grad():
         test_acc, test_miou = get_metrics(loader, model, loader.n_classes, train=False, flip_inference=True, scales=[1, 0.75, 1.5],
                                       write_images=False)
-    print('Test accuracy: ' + str(test_acc.numpy()))
+    print('Test accuracy: ' + str(test_acc))
     print('Test miou: ' + str(test_miou))
 
     #train_acc, train_miou = get_metrics(loader, model, loader.n_classes, train=True, preprocess_mode=preprocess_mode)

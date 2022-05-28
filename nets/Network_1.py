@@ -52,7 +52,7 @@ def get_default_device():
     else:
         return torch.device('cpu')
 device = get_default_device()
-
+#device = 'cuda:1'
 class SeparableConv2d(nn.Module):
     def __init__(self,in_channels,out_channels,kernel_size=1,stride=1,padding=0,dilation=1,bias=False):
         super(SeparableConv2d,self).__init__()
@@ -266,42 +266,42 @@ class Xception(nn.Module):
 
 
 
-def xception_out(inputs, pretrained=False):
-    """
-    Construct Xception.
-    """
+# def xception_out(inputs, pretrained=False):
+#     """
+#     Construct Xception.
+#     """
 
-    model = Xception(num_classes = 6)
-    model = model.to(device)
-    inputs = inputs.to(device)
-    if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['xception']))
+#     model = Xception(num_classes = 6)
+#     model = model.to(device)
+#     inputs = inputs.to(device)
+#     if pretrained:
+#         model.load_state_dict(model_zoo.load_url(model_urls['xception']))
     
-    features_0= model.block1.rep[4].register_forward_hook(get_features('block1_sepconv2_bn'))
-    features_1= model.block2.rep[5].register_forward_hook(get_features('block2_sepconv2_bn'))
-    features_2= model.block3.rep[5].register_forward_hook(get_features('block3_sepconv2_bn'))
-    features_3= model.bn5.register_forward_hook(get_features('block13_sepconv2_bn'))
-    features_4= model.bn7.register_forward_hook(get_features('block14_sepconv2_bn'))
+#     features_0= model.block1.rep[4].register_forward_hook(get_features('block1_sepconv2_bn'))
+#     features_1= model.block2.rep[5].register_forward_hook(get_features('block2_sepconv2_bn'))
+#     features_2= model.block3.rep[5].register_forward_hook(get_features('block3_sepconv2_bn'))
+#     features_3= model.bn5.register_forward_hook(get_features('block13_sepconv2_bn'))
+#     features_4= model.bn7.register_forward_hook(get_features('block14_sepconv2_bn'))
 
-    outputs=model(inputs)
+#     outputs=model(inputs)
 
-    #feats = [features_0, features_1, features_2, features_3, features_4]
+#     #feats = [features_0, features_1, features_2, features_3, features_4]
 
-    feats = []
+#     feats = []
 
-    feats.append(features['block14_sepconv2_bn'])
-    feats.append(features['block13_sepconv2_bn'])
-    feats.append(features['block3_sepconv2_bn'])
-    feats.append(features['block2_sepconv2_bn'])
-    feats.append(features['block1_sepconv2_bn'])
+#     feats.append(features['block14_sepconv2_bn'])
+#     feats.append(features['block13_sepconv2_bn'])
+#     feats.append(features['block3_sepconv2_bn'])
+#     feats.append(features['block2_sepconv2_bn'])
+#     feats.append(features['block1_sepconv2_bn'])
 
-    features_0.remove()
-    features_1.remove()
-    features_2.remove()
-    features_3.remove()
-    features_4.remove()
+#     features_0.remove()
+#     features_1.remove()
+#     features_2.remove()
+#     features_3.remove()
+#     features_4.remove()
 
-    return feats
+#     return feats
 
 
 #END XCEPTION
@@ -311,6 +311,8 @@ def xception_out(inputs, pretrained=False):
 class Segception_small(nn.Module):
     def __init__(self, num_classes=6, input_shape=(3, None, None), weights='imagenet'):
         super(Segception_small, self).__init__()
+        self.xception = Xception(num_classes)
+        #self.xception.load_state_dict(model_zoo.load_url(model_urls['xception']))
         self.num_classes=num_classes
         #note: filters=out_channels
         self.adap_encoder_1 = EncoderAdaption(in_channels=2048, out_channels=128, kernel_size=3, dilation=1)
@@ -328,21 +330,46 @@ class Segception_small(nn.Module):
         self.conv_logits = conv(in_channels= 32, out_channels=num_classes, kernel_size=1, stride=1, bias=True)
 
     def forward(self, inputs, mask=None, aux_loss=False):
-        # print(inputs.shape)
+        #print("Input shape: ",inputs.shape)
         #inputs = np.transpose(inputs, (0,3,2,1))
         #print(inputs.shape)
         #print('here:', inputs.shape)
 
-        outputs = xception_out(inputs)
+        features_0= self.xception.block1.rep[4].register_forward_hook(get_features('block1_sepconv2_bn'))
+        features_1= self.xception.block2.rep[5].register_forward_hook(get_features('block2_sepconv2_bn'))
+        features_2= self.xception.block3.rep[5].register_forward_hook(get_features('block3_sepconv2_bn'))
+        features_3= self.xception.bn5.register_forward_hook(get_features('block13_sepconv2_bn'))
+        features_4= self.xception.bn7.register_forward_hook(get_features('block14_sepconv2_bn'))
+
+        out=self.xception(inputs)
+
+        #feats = [features_0, features_1, features_2, features_3, features_4]
+
+        feats = []
+
+        feats.append(features['block14_sepconv2_bn'])
+        feats.append(features['block13_sepconv2_bn'])
+        feats.append(features['block3_sepconv2_bn'])
+        feats.append(features['block2_sepconv2_bn'])
+        feats.append(features['block1_sepconv2_bn'])
+
+        features_0.remove()
+        features_1.remove()
+        features_2.remove()
+        features_3.remove()
+        features_4.remove()
+
+        outputs = []
+        outputs = feats
         # add activations to the ourputs of the model
         for i in range(len(outputs)):
             outputs[i] = nn.LeakyReLU(negative_slope=0.3)(outputs[i])
             
-        # print("output[0].shape:", outputs[0].shape) #(256, 87, 55)
-        # print("output[1].shape:", outputs[1].shape) #(728, 44, 22)
-        # print("output[2].shape:", outputs[2].shape) #(728, 22, 14)
-        # print("output[3].shape:", outputs[3].shape) #(1024, 11, 7)
-        # print("output[4].shape:", outputs[4].shape) #(2048, 6, 4)
+        #print("output[0].shape:", outputs[0].shape) #(256, 87, 55)
+        #print("output[1].shape:", outputs[1].shape) #(728, 44, 22)
+        #print("output[2].shape:", outputs[2].shape) #(728, 22, 14)
+        #print("output[3].shape:", outputs[3].shape) #(1024, 11, 7)
+        #print("output[4].shape:", outputs[4].shape) #(2048, 6, 4)
 
         #pdb.set_trace()
 
@@ -484,7 +511,7 @@ class Conv_BN(nn.Module):
         self.stride = stride
 
         self.conv = conv(in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride)
-        self.bn = nn.BatchNorm2d(out_channels, eps=1e-3, momentum=0.993)
+        self.bn = nn.BatchNorm2d(out_channels, eps=1e-3, momentum=0.993).to(device)
 
     def forward(self, inputs,# training=None,
     activation=True):
@@ -510,7 +537,7 @@ class DepthwiseConv_BN(nn.Module):
         #print("dep:",out_channels)
 
         self.conv = separableConv(in_channels, out_channels, kernel_size=kernel_size, stride=stride,dilation=dilation)
-        self.bn = nn.BatchNorm2d(num_features=out_channels, eps=1e-3, momentum=0.993)
+        self.bn = nn.BatchNorm2d(num_features=out_channels, eps=1e-3, momentum=0.993).to(device)
 
     def forward(self, inputs#, training=None
     ):
@@ -570,16 +597,16 @@ class ASPP_2(nn.Module):
         return x
 
 def upsampling(inputs, scale):
-    return F.interpolate(inputs, scale_factor =2,  mode = 'bilinear', align_corners=True)
+    return F.interpolate(inputs, scale_factor =2,  mode = 'bilinear', align_corners = True).to(device)
 
 
 def reshape_into(inputs, input_to_copy):
-    return F.interpolate(inputs, size=[input_to_copy.shape[2], input_to_copy.shape[3]], mode = 'bilinear', align_corners=True)
+    return F.interpolate(inputs, size=[input_to_copy.shape[2], input_to_copy.shape[3]], mode = 'bilinear', align_corners=True).to(device)
 
 
 # convolution
-def conv(in_channels, out_channels, kernel_size, stride=1, dilation=1, bias=False):
-    return nn.Conv2d(in_channels, out_channels, kernel_size, stride=stride, padding_mode='zeros', bias=bias, dilation=dilation)
+def conv(in_channels, out_channels, kernel_size, stride=1, groups=1, dilation=1, padding_mode='zeros', padding =0, bias=False):
+    return nn.Conv2d(in_channels, out_channels, kernel_size, stride=stride, groups=groups, padding_mode=padding_mode, padding =padding, bias=bias, dilation=dilation).to(device)
 
 
 
@@ -593,17 +620,22 @@ class separableConv(nn.Module):
         self.stride = stride
         self.bias = bias
 
-        #print("hi:",out_channels)
+        
 
-        self.depthwise = nn.Conv2d(in_channels, in_channels, kernel_size=kernel_size, stride=stride, groups=in_channels, bias=bias, padding='same')
-        self.pointwise = nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=bias, padding='same')
+        self.depthwise = conv(in_channels, in_channels, kernel_size=kernel_size, stride=stride, groups=in_channels, bias=bias, padding='same')
+        #print("hi:",self.depthwise.weight.get_device())
+        self.pointwise = conv(in_channels, out_channels, kernel_size=1, stride=stride, bias=bias, padding='same')
+        #print("hei:",self.depthwise.weight.get_device())
+        
 
 
 
 
     def forward(self, x):
         import pdb
+        #print("pdb:",x.get_device())
         #pdb. set_trace()
+        #print("hoi:",self.depthwise.weight.get_device())
         x = self.depthwise(x)
         x = self.pointwise(x)
         return x
