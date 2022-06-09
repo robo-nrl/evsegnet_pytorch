@@ -188,8 +188,10 @@ def get_metrics(loader, model, n_classes, train=True, flip_inference=False, scal
     else:
         samples = len(loader.image_test_list)
         print("Samples:", samples)
-    for step in range(samples):  # for every batch
-        x, y, mask = loader.get_batch(size=1, train=train, augmenter=False)
+        bs=8
+        steps_per_epoch = int((samples / bs) + 1)
+    for step in range(steps_per_epoch):  # for every batch
+        x, y, mask = loader.get_batch(size=bs, train=train, augmenter=False)
 
         [y, mask] = convert_to_tensors([y, mask])
         mask = np.transpose(mask, (0, 2, 1))

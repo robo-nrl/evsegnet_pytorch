@@ -5,9 +5,12 @@ import tensorflow.contrib.eager as tfe
 import os
 import nets.Network as Segception
 import argparse
-from utils.utils import get_params, restore_state, init_model, inference
-import cv2
+#from PIL import Image
+from utils.utils import get_params, restore_state, init_model 
+from utils.utils import inference
+#import cv2
 from collections import namedtuple
+import h5py
 
 # enable eager mode
 tf.enable_eager_execution()
@@ -56,11 +59,6 @@ labels = [
     Label(  'road'                 ,  0 ,        0 , 'flat'            , 1       , (128, 64,128) ),
     Label(  'sidewalk'             ,  0 ,        1 , 'flat'            , 1      ,  (244, 35,232) ),
     Label(  'parking'              ,  0 ,      255 , 'flat'            , 1       , (250,170,160) ),
-    Label(  'rail track'           , 0 ,      255 , 'flat'            , 1       , (230,150,140) ),
-    Label(  'building'             , 1 ,        2 , 'construction'    , 2       , ( 70, 70, 70) ),
-    Label(  'wall'                 , 1 ,        3 , 'construction'    , 2       , (102,102,156) ),
-    Label(  'fence'                , 1 ,        4 , 'construction'    , 2      ,  (190,153,153) ),
-    Label(  'guard rail'           , 1 ,      255 , 'construction'    , 2       , (180,165,180) ),
     Label(  'bridge'               , 1 ,      255 , 'construction'    , 2       , (150,100,100) ),
     Label(  'tunnel'               , 1 ,      255 , 'construction'    , 2       , (150,120, 90) ),
     Label(  'pole'                 , 2 ,        5 , 'object'          , 3       , (153,153,153) ),
@@ -68,9 +66,7 @@ labels = [
     Label(  'traffic light'        , 2 ,        6 , 'object'          , 3      ,  (250,170, 30) ),
     Label(  'traffic sign'         , 2 ,        7 , 'object'          , 3      ,  (220,220,  0) ),
     Label(  'vegetation'           , 3 ,        8 , 'nature'          , 4      ,  (107,142, 35) ),
-    Label(  'terrain'              , 3 ,        9 , 'nature'          , 4     ,   (152,251,152) ),
-    Label(  'sky'                  , 1 ,       10 , 'sky'             , 5      ,  ( 70,130,180) ),
-    Label(  'person'               , 4 ,       11 , 'human'           , 6       ,  (220, 20, 60) ),
+    Label(  'terrain'              , 3 ,        9 , 'nature'          , 4  ,  (220, 20, 60) ),
     Label(  'rider'                , 4 ,       12 , 'human'           , 6       ,  (255,  0,  0) ),
     Label(  'car'                  , 5 ,       13 , 'vehicle'         , 7       ,  (  0,  0,142) ),
     Label(  'truck'                , 5 ,       14 , 'vehicle'         , 7       ,  (  0,  0, 70) ),
@@ -93,9 +89,9 @@ def fromIdTrainToId(imgin):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--image_path", help="image path", default='/media/snowflake/Data/city/images/train/aachen_000003_000019_gtFine_labelIds.png')
-    #parser.add_argument("--dataset", help="Dataset path", default='outdoorday_2')
-    parser.add_argument("--model_path", help="Model path", default='/home/min/a/sdasbisw/Desktop/PROJECTS/evcoop/Ev-SegNet-master/weights/cityscapes_grayscale/')
+    #parser.add_argument("--image_path", help="image path", default='/home/min/a/sdasbisw/Desktop/PROJECTS/evcoop/left_image00000.png')
+    parser.add_argument("--dataset", help="Dataset path", default='outdoor_day2')
+    parser.add_argument("--model_path", help="Model path", default='/home/min/a/sdasbisw/Desktop/PROJECTS/evcoop/Ev-SegNet-master/weights/cityscapes_grayscale')
     parser.add_argument("--n_classes", help="number of classes to classify", default=19)
     parser.add_argument("--width", help="number of epochs to train", default=352)
     parser.add_argument("--height", help="number of epochs to train", default=224)
@@ -112,7 +108,9 @@ if __name__ == "__main__":
 
 
     # build model and optimizer
-    model = Segception.Segception_v4(num_classes=n_classes, weights=None, input_shape=(None, None, channels))
+    #import pdb; pdb.set_trace()
+    model = Segception.Segception_small(num_classes=n_classes, weights=None, input_shape=(None, None, channels))
+    #model = model.to(args.device)
 
     # Init models (optional, just for get_params function)
     init_model(model, input_shape=(1, width, height, channels))
@@ -129,16 +127,66 @@ if __name__ == "__main__":
     restore_state(restore_model, name_best_model)
     get_params(model)
 
+    #label_dir = os.path.join('/home/min/a/sdasbisw/Desktop/PROJECTS/evcoop/Ev-SegNet-master/', 'seglabel')
+    
+    #label_dir = "/local/a/datasets/outdoor_day2_label/"
+    #if not os.path.exists(label_dir):
+    #    os.makedirs(label_dir)
+    data_folder_path = '/local/a/datasets/mvsec-hdf5/'
+    seq = 'outdoor_day2_data.hdf5'
+    #import glob
+    #for img in glob.glob("/home/min/a/sdasbisw/Desktop/PROJECTS/evcoop/Ev-SegNet-master/outdoor_day2/*.png"):
+    with h5py.File(os.path.join(data_folder_path, seq), 'r') as f:
+    #with h5py.File('indoor_flying1_data.hdf5', 'r') as f:
+        gray_image = f['davis']['left']['image_raw']
+        #label_dir = os.path.join(label_dir, img.filename)
+        #print(img.filename)
+        #filename = img.filename
+        
+        #filename = img.split('/')[-1]
+        #path=os.path.join(label_dir , filename)
+        #print(path)
+        #img= cv2.imread(img,0)
+        
+        #if img is None:
+        #    print('Wrong path:', img)
+        #img = cv2.imread(args.image_path, 0)
+        #img = np.array(img)
+        img = np.resize(gray_image, (width, height)).astype(np.float32)
+        #a=img.shape
+        img = np.expand_dims(img, -1)
+        img = np.expand_dims(img, 0)
+        print(img.shape)
 
-    img = cv2.imread(args.image_path, 0)
-    img = cv2.resize(img, (width, height), interpolation=cv2.INTER_AREA).astype(np.float32)
-    img = np.expand_dims(img, -1)
-    img = np.expand_dims(img, 0) 
-    prediction = np.squeeze(prediction.numpy()).astype(np.uint8)
-    prediction_6classes = fromIdTrainToId(prediction).astype(np.uint8)
+        prediction = inference(model, img, n_classes, flip_inference=True, scales=[0.75, 1, 1.5]#, preprocess_mode=None
+        )
+        # inp = tf.keras.Input(shape=[224,352,1])
+        # ou = model.call(inp)
+        # print(tf.keras.Model(inputs=inp, outputs=ou))
+        print(prediction.numpy().shape)
+        prediction = tf.argmax(prediction, -1)
+        print(prediction.numpy().shape)
 
-    cv2.imshow('image', img)
-    cv2.imshow('pred (cityscapes classes)', prediction*13) # *13 for visualization
-    cv2.imshow('pred (event classes)', prediction_6classes*40)# *40 for visualization
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+        img = np.squeeze(img).astype(np.uint8)
+        prediction = np.squeeze(prediction.numpy()).astype(np.uint8)
+        prediction_6classes = fromIdTrainToId(prediction).astype(np.uint8)
+        #save_path=os.path.join(label_dir)+'.png'
+        #print(label_dir)
+        #filename = "images/file_%d.jpg"%d
+        #seglabel=[]
+        hf = h5py.File('indoor_flying1_label.hdf5', 'w')
+        hf.create_dataset('label', data=prediction*40)
+        hf.close()
+        #cv2.imwrite(path, prediction*40)
+        #cv2.imwrite(save_path, prediction*13)
+        #cv2.imwrite(, img)
+        #seglabels=[]
+        #seglabels.append(img)
+        #np.save(os.path.join(label_dir, str(img)), prediction)
+
+    #cv2.imshow('image', img)
+    #cv2.imshow('pred (cityscapes classes)', prediction*13) # *13 for visualization
+    #cv2.imshow('pred (event classes)', prediction_6classes*40)# *40 for visualization
+    #cv2.waitKey(0)
+
+    #cv2.destroyAllWindows()

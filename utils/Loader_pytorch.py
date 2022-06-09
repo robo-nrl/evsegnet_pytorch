@@ -1,29 +1,29 @@
-from __future__ import print_function
+import cv2
+#from __future__ import print_function
 import os
 import numpy as np
 #import tensorflow as tf
 #from tensorflow.keras.utils import to_categorical
 import glob
-import cv2
 import sys
-from tokenize import group
-from PIL import Image
-import torch.nn as nn
-import torch.nn.functional as F
-import matplotlib.pyplot as plt
-import argparse
-import json
-from requests.exceptions import ConnectionError, ReadTimeout, TooManyRedirects, MissingSchema, InvalidURL
-import logging
-import random
-import glob
-import torchvision.transforms as tvt
-import torchvision
-import torch
-from torchvision import datasets, models, transforms
-import ast
-import requests
-from torch.utils.data import DataLoader, Dataset
+#from tokenize import group
+#from PIL import Image
+#import torch.nn as nn
+#import torch.nn.functional as F
+#import matplotlib.pyplot as plt
+#import argparse
+#import json
+#from requests.exceptions import ConnectionError, ReadTimeout, TooManyRedirects, MissingSchema, InvalidURL
+#import logging
+#import random
+#import glob
+#import torchvision.transforms as tvt
+#import torchvision
+#import torch
+#from torchvision import datasets, models, transforms
+#import ast
+#import requests
+#from torch.utils.data import DataLoader, Dataset
 
 sys.path.insert(0, '/home/min/a/sdasbisw/Desktop/PROJECTS/evcoop/Ev-SegNet-master/utils/')
 from augmenters import get_augmenter
@@ -218,7 +218,7 @@ class Loader:
             x = np.zeros([size, self.height, self.width, int(self.dim + self.channels_events)], dtype=np.float32)
         else:
             x = np.zeros([size, self.height, self.width, self.dim], dtype=np.float32)
-        y = np.zeros([size, self.height, self.width], dtype=np.uint8)
+        y = np.zeros([size, self.height, self.width], dtype=np.float32)
         mask = np.ones([size, self.height, self.width], dtype=np.float32)
 
         if train:
@@ -322,7 +322,7 @@ class Loader:
 
         # Convert to categorical. Add one class for ignored pixels
         y = to_categorical(y, num_classes=self.n_classes)
-        y = y.reshape((a, b, c, self.n_classes)).astype(np.uint8)
+        y = y.reshape((a, b, c, self.n_classes)).astype(np.float32) #uint8
 
         return x, y, mask
 
@@ -331,7 +331,7 @@ class Loader:
         #print("4")
 
         x = np.zeros([size, self.height, self.width, self.dim], dtype=np.float32)
-        y = np.zeros([size], dtype=np.uint8)
+        y = np.zeros([size], dtype=np.float32) #uint8
 
         if train:
             file_list = self.train_list

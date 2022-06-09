@@ -5,7 +5,7 @@ import tensorflow.contrib.eager as tfe
 import os
 import nets.Network as Segception
 import argparse
-from PIL import Image
+#from PIL import Image
 from utils.utils import get_params, restore_state, init_model 
 from utils.utils import inference
 import cv2

@@ -376,10 +376,10 @@ class Segception_small(nn.Module):
         x = self.adap_encoder_1(outputs[0]#, training=training
         )
         # print("x.shape:", x.shape)
-        x = upsampling(x, scale=2)
+        x = upsampling(x, scale=2, align_corners = True)
         # print("x.shape:", x.shape)
         x += reshape_into(self.adap_encoder_2(outputs[1]#, training=training
-        ), x)  # 128
+        ), x, align_corners = True)  # 128
         # print("x.shape:", x.shape)
         x = self.decoder_conv_1(x
         #, training=training
@@ -387,18 +387,18 @@ class Segception_small(nn.Module):
 
         # print("here:", x.shape)
 
-        x = upsampling(x, scale=2)
+        x = upsampling(x, scale=2, align_corners = True)
         # print("here:", x.shape)
-        x += reshape_into(self.adap_encoder_3(outputs[2]), x)  # 256
+        x += reshape_into(self.adap_encoder_3(outputs[2]), x, align_corners = True)  # 256
         # print("x.shape:", x.shape)
         x = self.decoder_conv_2(x
         #, training=training
         )  # 64
         # print("x.shape:", x.shape)
 
-        x = upsampling(x, scale=2)
+        x = upsampling(x, scale=2, align_corners = True)
         x += reshape_into(self.adap_encoder_4(outputs[3]#, training=training
-        ), x)  # 128
+        ), x, align_corners = True)  # 128
         # print("x.shape:", x.shape)
         x = self.decoder_conv_3(x#, training=training
         )  # 32
@@ -407,15 +407,15 @@ class Segception_small(nn.Module):
         x = self.aspp(x, #training=training, 
         operation='sum')  # 128
 
-        x = upsampling(x, scale=2)
+        x = upsampling(x, scale=2, align_corners = True)
         x += reshape_into(self.adap_encoder_5(outputs[4], #training=training
-        ), x)  # 64
+        ), x, align_corners = True)  # 64
         # print("x.shape:", x.shape)
         x = self.decoder_conv_4(x#, training=training
         )  # 32
         # print("x.shape:", x.shape)
         x = self.conv_logits(x)
-        x = upsampling(x, scale=2)
+        x = upsampling(x, scale=2, align_corners = True)
 
         if aux_loss:
             return x, x
@@ -572,7 +572,7 @@ class ASPP_2(nn.Module):
         #pdb.set_trace()
         image_features = self.conv1(image_features#, training=training
         )
-        image_features=F.interpolate(image_features, size=(feature_map_size[2], feature_map_size[3]), mode='bilinear')
+        image_features=F.interpolate(image_features, size=(feature_map_size[2], feature_map_size[3]), mode='bilinear', align_corners=True)
         x1 = self.conv2(inputs#, training=training
         )
         x2 = self.conv3(inputs#, training=training
@@ -596,12 +596,12 @@ class ASPP_2(nn.Module):
 
         return x
 
-def upsampling(inputs, scale):
-    return F.interpolate(inputs, scale_factor =2,  mode = 'bilinear', align_corners = True).to(device)
+def upsampling(inputs, scale, align_corners):
+    return F.interpolate(inputs, scale_factor =scale,  mode = 'bilinear', align_corners = align_corners).to(device)
 
 
-def reshape_into(inputs, input_to_copy):
-    return F.interpolate(inputs, size=[input_to_copy.shape[2], input_to_copy.shape[3]], mode = 'bilinear', align_corners=True).to(device)
+def reshape_into(inputs, input_to_copy, align_corners):
+    return F.interpolate(inputs, size=[input_to_copy.shape[2], input_to_copy.shape[3]], mode = 'bilinear', align_corners=align_corners).to(device)
 
 
 # convolution

@@ -1,7 +1,7 @@
 import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.eager as tfe
-from sklearn.metrics import confusion_matrix
+#from sklearn.metrics import confusion_matrix
 import math
 import os
 import cv2
@@ -131,7 +131,7 @@ def get_metrics(loader, model, n_classes, train=True, flip_inference=False, scal
         loader.index_test = 0
 
     accuracy = tfe.metrics.Accuracy()
-    conf_matrix = np.zeros((n_classes, n_classes))
+    #conf_matrix = np.zeros((n_classes, n_classes))
     if train:
         samples = len(loader.image_train_list)
     else:
@@ -154,10 +154,11 @@ def get_metrics(loader, model, n_classes, train=True, flip_inference=False, scal
 
         labels, predictions = erase_ignore_pixels(labels=tf.argmax(y, 1), predictions=tf.argmax(y_, 1), mask=mask)
         accuracy(labels, predictions)
-        conf_matrix += confusion_matrix(labels.numpy(), predictions.numpy(), labels=range(0, n_classes))
+        #conf_matrix += confusion_matrix(labels.numpy(), predictions.numpy(), labels=range(0, n_classes))
 
     # get the train and test accuracy from the model
-    return accuracy.result(), compute_iou(conf_matrix)
+    return accuracy.result()
+    #return compute_iou(conf_matrix)
 
 # computes the miou given a confusion amtrix
 def compute_iou(conf_matrix):
